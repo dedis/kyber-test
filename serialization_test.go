@@ -129,8 +129,8 @@ func TestCrossVersionScalarCompatibility(t *testing.T) {
 	suiteV4 := edv4.NewBlakeSHA256Ed25519()
 
 	// Use the same seed for both versions
-	randV3 := suiteV3.XOF([]byte("cross-version-test"))
-	randV4 := suiteV4.XOF([]byte("cross-version-test"))
+	randV3 := suiteV3.XOF([]byte("cross-kyber-versions-scalar-test"))
+	randV4 := suiteV4.XOF([]byte("cross-kyber-versions-scalar-test"))
 
 	// Create scalars with the same seed
 	scalarV3 := suiteV3.Scalar().Pick(randV3)
@@ -186,8 +186,8 @@ func TestCrossVersionPointCompatibility(t *testing.T) {
 	suiteV4 := edv4.NewBlakeSHA256Ed25519()
 
 	// Use the same seed for both versions
-	randV3 := suiteV3.XOF([]byte("cross-version-point-test"))
-	randV4 := suiteV4.XOF([]byte("cross-version-point-test"))
+	randV3 := suiteV3.XOF([]byte("cross-kyber-versions-point-test"))
+	randV4 := suiteV4.XOF([]byte("cross-kyber-versions-point-test"))
 
 	// Create keypairs with the same seed
 	privateKeyV3 := suiteV3.Scalar().Pick(randV3)
