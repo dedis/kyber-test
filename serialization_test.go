@@ -415,3 +415,4 @@ func TestMarshalSize(t *testing.T) {
 	}
 	t.Logf("Point MarshalSize: %d bytes", pointSizeV3)
 }
+
