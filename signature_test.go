@@ -10,8 +10,10 @@ import (
 	"github.com/stretchr/testify/require"
 	kyberv3 "go.dedis.ch/kyber/v3"
 	edv3 "go.dedis.ch/kyber/v3/group/edwards25519"
+	suitesv3 "go.dedis.ch/kyber/v3/suites"
 	kyberv4 "go.dedis.ch/kyber/v4"
 	edv4 "go.dedis.ch/kyber/v4/group/edwards25519"
+	suitesv4 "go.dedis.ch/kyber/v4/suites"
 	"go.dedis.ch/protobuf"
 )
 
@@ -363,19 +365,29 @@ func TestSignatureEncodingCompatibility(t *testing.T) {
 
 // TestSignatureEncodingCompatibility tests that the encoding format is compatible.
 func TestSignatureEncodingCompatibilityWithProtobuf(t *testing.T) {
-	suiteV3 := edv3.NewBlakeSHA256Ed25519()
-	suiteV4 := edv4.NewBlakeSHA256Ed25519()
+	type BasicSigV3 struct {
+		C kyberv3.Scalar
+		R kyberv3.Scalar
+	}
 
-	protobuf.RegisterInterface(func() interface{} { return suiteV3.Scalar() })
-	protobuf.RegisterInterface(func() interface{} { return suiteV4.Scalar() })
+	type BasicSigV4 struct {
+		C kyberv4.Scalar
+		R kyberv4.Scalar
+	}
+
+	suiteV3 := suitesv3.MustFind("ed25519")
+	suiteV4 := suitesv4.MustFind("ed25519")
 
 	// Create a signature struct in V3
 	randV3 := suiteV3.XOF([]byte("encoding-test"))
 	c := suiteV3.Scalar().Pick(randV3)
 	r := suiteV3.Scalar().Pick(randV3)
 
-	sigV3 := basicSigV3{C: c, R: r}
+	sigV3 := BasicSigV3{C: c, R: r}
 
+	protobuf.RegisterInterface(func() interface{} { return suiteV3.Scalar() })
+
+	// Encode the signature in V3
 	bufV3, err := protobuf.Encode(&sigV3)
 	if err != nil {
 		t.Fatalf("Failed to encode V3 signature with protobuf: %v", err)
@@ -383,9 +395,10 @@ func TestSignatureEncodingCompatibilityWithProtobuf(t *testing.T) {
 
 	t.Logf("V3 encoded signature: %s", hex.EncodeToString(bufV3))
 
-	sigV3dec := basicSigV3{
-		C: suiteV3.Scalar(),
-		R: suiteV3.Scalar(),
+	randV3dec := suiteV3.XOF([]byte("decoding-test"))
+	sigV3dec := BasicSigV3{
+		C: suiteV3.Scalar().Pick(randV3dec),
+		R: suiteV3.Scalar().Pick(randV3dec),
 	}
 
 	// Decode the signature in V3
@@ -397,8 +410,10 @@ func TestSignatureEncodingCompatibilityWithProtobuf(t *testing.T) {
 	require.Equal(t, sigV3.C, sigV3dec.C)
 	require.Equal(t, sigV3.R, sigV3dec.R)
 
+	protobuf.RegisterInterface(func() interface{} { return suiteV4.Scalar() })
+
 	// Decode the signature in V4
-	sigV4 := basicSigV4{
+	sigV4 := BasicSigV4{
 		C: suiteV4.Scalar(),
 		R: suiteV4.Scalar(),
 	}

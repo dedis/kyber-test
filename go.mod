@@ -7,7 +7,7 @@ go 1.25.0
 
 require (
 	github.com/stretchr/testify v1.11.1
-	go.dedis.ch/kyber/v3 v3.1.0
+	go.dedis.ch/kyber/v3 v3.0.9
 	go.dedis.ch/kyber/v4 v4.0.1-alpha.1
 	go.dedis.ch/protobuf v1.0.11
 )
