@@ -7,10 +7,12 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/stretchr/testify/require"
 	kyberv3 "go.dedis.ch/kyber/v3"
 	edv3 "go.dedis.ch/kyber/v3/group/edwards25519"
 	kyberv4 "go.dedis.ch/kyber/v4"
 	edv4 "go.dedis.ch/kyber/v4/group/edwards25519"
+	"go.dedis.ch/protobuf"
 )
 
 // Suite interfaces for V3 and V4
@@ -353,6 +355,76 @@ func TestSignatureEncodingCompatibility(t *testing.T) {
 	t.Logf("V4 re-encoded signature: %s", hex.EncodeToString(bufV4Out.Bytes()))
 
 	if !bytes.Equal(bufV3.Bytes(), bufV4Out.Bytes()) {
+		t.Error("Signature encoding differs between V3 and V4")
+	} else {
+		t.Log("Signature encoding is compatible between V3 and V4")
+	}
+}
+
+// TestSignatureEncodingCompatibility tests that the encoding format is compatible.
+func TestSignatureEncodingCompatibilityWithProtobuf(t *testing.T) {
+	suiteV3 := edv3.NewBlakeSHA256Ed25519()
+	suiteV4 := edv4.NewBlakeSHA256Ed25519()
+
+	protobuf.RegisterInterface(func() interface{} { return suiteV3.Scalar() })
+	protobuf.RegisterInterface(func() interface{} { return suiteV4.Scalar() })
+
+	// Create a signature struct in V3
+	randV3 := suiteV3.XOF([]byte("encoding-test"))
+	c := suiteV3.Scalar().Pick(randV3)
+	r := suiteV3.Scalar().Pick(randV3)
+
+	sigV3 := basicSigV3{C: c, R: r}
+
+	bufV3, err := protobuf.Encode(&sigV3)
+	if err != nil {
+		t.Fatalf("Failed to encode V3 signature with protobuf: %v", err)
+	}
+
+	t.Logf("V3 encoded signature: %s", hex.EncodeToString(bufV3))
+
+	sigV3dec := basicSigV3{
+		C: suiteV3.Scalar(),
+		R: suiteV3.Scalar(),
+	}
+
+	// Decode the signature in V3
+	err = protobuf.Decode(bufV3, &sigV3dec)
+	if err != nil {
+		t.Fatalf("Failed to decode V3 signature with protobuf: %v", err)
+	}
+
+	require.Equal(t, sigV3.C, sigV3dec.C)
+	require.Equal(t, sigV3.R, sigV3dec.R)
+
+	// Decode the signature in V4
+	sigV4 := basicSigV4{
+		C: suiteV4.Scalar(),
+		R: suiteV4.Scalar(),
+	}
+
+	err = protobuf.Decode(bufV3, &sigV4)
+	if err != nil {
+		t.Fatalf("Failed to decode V3 signature in V4 with protobuf: %v", err)
+	}
+
+	//if err := suiteV4.Read(bufV4, &sigV4); err != nil {
+	//	t.Fatalf("Failed to decode V3 signature in V4: %v", err)
+	//}
+
+	// Re-encode in V4 and compare
+	bufV4, err := protobuf.Encode(&sigV4)
+	if err != nil {
+		t.Fatalf("Failed to re-encode signature in V4 with protobuf: %v", err)
+	}
+
+	//if err := suiteV4.Write(&bufV4Out, &sigV4); err != nil {
+	//	t.Fatalf("Failed to re-encode signature in V4: %v", err)
+	//}
+
+	t.Logf("V4 re-encoded signature: %s", hex.EncodeToString(bufV4))
+
+	if !bytes.Equal(bufV3, bufV4) {
 		t.Error("Signature encoding differs between V3 and V4")
 	} else {
 		t.Log("Signature encoding is compatible between V3 and V4")
