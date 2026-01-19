@@ -21,8 +21,8 @@ go test -v ./...
 ## Tested Versions
 
 - kyber v3.1.0
-- kyber v4.0.0-pre2
-
+- kyber v4.0.1-alpha.1
+git
 ## Test Coverage
 
 ### Serialization Tests (`serialization_test.go`)
