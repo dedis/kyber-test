@@ -20,7 +20,6 @@ import (
 var (
 	suiteV3 = suitev3.NewBlakeSHA256Ed25519()
 	suiteV4 = suitev4.NewBlakeSHA256Ed25519()
-	secret  []byte
 )
 
 type VersionlessVerifier interface {
@@ -64,12 +63,13 @@ func (v *VerifierV3) getIndex() int {
 }
 
 func (v *VerifierV3) processEncryptedDeal(dealBytes []byte) ([]byte, error) {
-	deal := &pedersenv3.EncryptedDeal{}
+	deal := &V3EncryptedDeal{}
 	err := protobuf.Decode(dealBytes, deal)
 	if err != nil {
 		return nil, err
 	}
-	resp, err := v.ProcessEncryptedDeal(deal)
+	dealV3 := deal.ToEncryptedDeal()
+	resp, err := v.ProcessEncryptedDeal(dealV3)
 	if err != nil {
 		return nil, err
 	}
@@ -86,6 +86,8 @@ func (v *VerifierV3) processResponse(responseBytes []byte) error {
 	if responseBytes == nil {
 		return v.ProcessResponse(nil)
 	}
+	protobuf.RegisterInterface(func() interface{} { return suiteV3.Point() })
+	protobuf.RegisterInterface(func() interface{} { return suiteV3.Scalar() })
 	response := &pedersenv3.Response{}
 	err := protobuf.Decode(responseBytes, response)
 	if err != nil {
@@ -171,14 +173,6 @@ func (v *VerifierV4) deal() ([]byte, error) {
 	return protobuf.Encode(dealt)
 }
 
-func registerInterfaces() {
-	protobuf.RegisterInterface(func() interface{} { return suiteV3.Point() })
-	protobuf.RegisterInterface(func() interface{} { return suiteV3.Scalar() })
-	protobuf.RegisterInterface(func() interface{} { return suiteV4.Point() })
-	protobuf.RegisterInterface(func() interface{} { return suiteV4.Scalar() })
-
-}
-
 type DealerV3 struct {
 	*pedersenv3.Dealer
 }
@@ -237,11 +231,6 @@ func (d *DealerV4) processResponse(responseBytes []byte) ([]byte, error) {
 	return protobuf.Encode(justification)
 }
 
-func init() {
-	registerInterfaces()
-	secret = genSecret(3)
-}
-
 func genSecret(version int) []byte {
 	switch version {
 	case 3:
@@ -263,24 +252,6 @@ func genSecret(version int) []byte {
 	}
 }
 
-func getSecretV3() kyberV3.Scalar {
-	secretV3 := suiteV3.Scalar()
-	err := secretV3.UnmarshalBinary(secret)
-	if err != nil {
-		panic(err)
-	}
-	return secretV3
-}
-
-func getSecretV4() kyberV4.Scalar {
-	secretV4 := suiteV4.Scalar()
-	err := secretV4.UnmarshalBinary(secret)
-	if err != nil {
-		panic(err)
-	}
-	return secretV4
-}
-
 func genPairV3() (kyberV3.Scalar, kyberV3.Point) {
 	secret := suiteV3.Scalar().Pick(suiteV3.RandomStream())
 	public := suiteV3.Point().Mul(secret, nil)
@@ -293,12 +264,12 @@ func genPairV4() (kyberV4.Scalar, kyberV4.Point) {
 	return secret, public
 }
 
-func genDealerV3(publicKeys [][]byte, threshold int) (*DealerV3, kyberV3.Point, error) {
+func genDealerV3(publicKeys [][]byte, threshold int, secret kyberV3.Scalar) (*DealerV3, kyberV3.Point, error) {
 	// Read all public points using kyber V3
 	verifiersPubV3 := getPubV3(publicKeys)
 	dealerSecV3, dealerPubV3 := genPairV3()
 
-	dealer, err := pedersenv3.NewDealer(suiteV3, dealerSecV3, getSecretV3(), verifiersPubV3, threshold)
+	dealer, err := pedersenv3.NewDealer(suiteV3, dealerSecV3, secret, verifiersPubV3, threshold)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -308,12 +279,12 @@ func genDealerV3(publicKeys [][]byte, threshold int) (*DealerV3, kyberV3.Point, 
 	return dealerV3, dealerPubV3, nil
 }
 
-func genDealerV4(publicKeys [][]byte, threshold uint32) (*DealerV4, kyberV4.Point, error) {
+func genDealerV4(publicKeys [][]byte, threshold uint32, secret kyberV4.Scalar) (*DealerV4, kyberV4.Point, error) {
 	// Read all public points using kyber V3
 	verifiersPubV4 := getPubV4(publicKeys)
 	dealerSecV4, dealerPubV3 := genPairV4()
 
-	dealer, err := pedersenv4.NewDealer(suiteV4, dealerSecV4, getSecretV4(), verifiersPubV4, threshold)
+	dealer, err := pedersenv4.NewDealer(suiteV4, dealerSecV4, secret, verifiersPubV4, threshold)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -438,7 +409,8 @@ func genVerifiers(nbV3, nbV4 int, dealerPublicKey []byte, privateKeys, publicKey
 func encryptedDealsV3ToBytes(deals []*pedersenv3.EncryptedDeal) ([][]byte, error) {
 	dealsBytes := make([][]byte, len(deals))
 	for i, deal := range deals {
-		dealBytes, err := protobuf.Encode(deal)
+		dealFixed := FromEncryptedDeal(deal)
+		dealBytes, err := protobuf.Encode(dealFixed)
 		if err != nil {
 			return nil, err
 		}
@@ -537,18 +509,23 @@ func runTest(t *testing.T, nbVerifiersV3, nbVerifiersV4, dealerVersion int) {
 	// Generate all the public/secret keys
 	privateKeys, publicKeys := genPubSecKeys(nbVerifiersV3, nbVerifiersV4)
 
+	// Generate the secret
+	secretBytes := genSecret(dealerVersion)
+
 	var dealerPublicKey []byte
 	var dealer VersionlessDealer
 	// Create the dealer
 	switch dealerVersion {
 	case 3:
-		dealerV3, dealerV3Pub, err := genDealerV3(publicKeys, threshold)
+		secretV3 := bytesToScalarV3(secretBytes)
+		dealerV3, dealerV3Pub, err := genDealerV3(publicKeys, threshold, secretV3)
 		dealer = dealerV3
 		require.NoError(t, err)
 		dealerPublicKey, err = dealerV3Pub.MarshalBinary()
 		require.NoError(t, err)
 	case 4:
-		dealerV4, dealerV4Pub, err := genDealerV4(publicKeys, uint32(threshold))
+		secretV4 := bytesToScalarV4(secretBytes)
+		dealerV4, dealerV4Pub, err := genDealerV4(publicKeys, uint32(threshold), secretV4)
 		dealer = dealerV4
 		require.NoError(t, err)
 		dealerPublicKey, err = dealerV4Pub.MarshalBinary()
@@ -589,17 +566,19 @@ func runTest(t *testing.T, nbVerifiersV3, nbVerifiersV4, dealerVersion int) {
 
 	switch dealerVersion {
 	case 3:
+		secretV3 := bytesToScalarV3(secretBytes)
 		dealerV3, ok := dealer.(*DealerV3)
 		require.True(t, ok)
 		priPoly := dealerV3.Dealer.PrivatePoly()
 		priCoefficients := priPoly.Coefficients()
-		require.Equal(t, getSecretV3().String(), priCoefficients[0].String())
+		require.Equal(t, secretV3.String(), priCoefficients[0].String())
 	case 4:
+		secretV4 := bytesToScalarV4(secretBytes)
 		dealerV4, ok := dealer.(*DealerV4)
 		require.True(t, ok)
 		priPoly := dealerV4.Dealer.PrivatePoly()
 		priCoefficients := priPoly.Coefficients()
-		require.Equal(t, getSecretV4().String(), priCoefficients[0].String())
+		require.Equal(t, secretV4.String(), priCoefficients[0].String())
 	}
 }
 
@@ -612,6 +591,8 @@ func TestVSS_v3Only(t *testing.T) {
 }
 
 func TestVSS_v4Only(t *testing.T) {
+	protobuf.RegisterInterface(func() interface{} { return suiteV4.Point() })
+	protobuf.RegisterInterface(func() interface{} { return suiteV4.Scalar() })
 	nbVerifiersV3 := 0
 	nbVerifiersV4 := 7
 	runTest(t, nbVerifiersV3, nbVerifiersV4, 4)
@@ -620,7 +601,32 @@ func TestVSS_v4Only(t *testing.T) {
 func TestVSS_3V3_4V4(t *testing.T) {
 	nbVerifiersV3 := 3
 	nbVerifiersV4 := 4
-	runTest(t, nbVerifiersV3, nbVerifiersV4, 4)
+	runTest(t, nbVerifiersV3, nbVerifiersV4, 3)
+}
+
+type V3EncryptedDeal struct {
+	DHKey     []byte
+	Signature []byte
+	Cipher    []byte
+	Nonce     []byte
+}
+
+func FromEncryptedDeal(deal *pedersenv3.EncryptedDeal) *V3EncryptedDeal {
+	return &V3EncryptedDeal{
+		DHKey:     deal.DHKey,
+		Signature: deal.Signature,
+		Cipher:    deal.Cipher,
+		Nonce:     deal.Nonce,
+	}
+}
+
+func (deal *V3EncryptedDeal) ToEncryptedDeal() *pedersenv3.EncryptedDeal {
+	return &pedersenv3.EncryptedDeal{
+		DHKey:     deal.DHKey,
+		Signature: deal.Signature,
+		Cipher:    deal.Cipher,
+		Nonce:     deal.Nonce,
+	}
 }
 
 func TestEncryptedDeal_Serialization(t *testing.T) {
@@ -635,7 +641,8 @@ func TestEncryptedDeal_Serialization(t *testing.T) {
 	var dealer VersionlessDealer
 
 	// Create the dealer
-	dealer, _, err := genDealerV3(publicKeys, threshold)
+	secret, _ := genPairV3()
+	dealer, _, err := genDealerV3(publicKeys, threshold, secret)
 	require.NoError(t, err)
 
 	// 1. dispatch deal
@@ -644,14 +651,15 @@ func TestEncryptedDeal_Serialization(t *testing.T) {
 	// Encode the deals to bytes
 	dealsBytes := make([][]byte, len(deals))
 	for i, deal := range deals {
-		dealBytes, err := protobuf.Encode(deal)
+		fixedDeal := FromEncryptedDeal(deal)
+		dealBytes, err := protobuf.Encode(fixedDeal)
 		require.NoError(t, err)
 		dealsBytes[i] = dealBytes
 	}
 
 	// Decode the deals to V3
 	for i, deal := range dealsBytes {
-		dealV3 := &pedersenv3.EncryptedDeal{}
+		dealV3 := &V3EncryptedDeal{}
 		err := protobuf.Decode(deal, dealV3)
 		require.NoError(t, err)
 		dealOg := deals[i]
