@@ -395,11 +395,7 @@ func TestSignatureEncodingCompatibilityWithProtobuf(t *testing.T) {
 
 	t.Logf("V3 encoded signature: %s", hex.EncodeToString(bufV3))
 
-	randV3dec := suiteV3.XOF([]byte("decoding-test"))
-	sigV3dec := BasicSigV3{
-		C: suiteV3.Scalar().Pick(randV3dec),
-		R: suiteV3.Scalar().Pick(randV3dec),
-	}
+	sigV3dec := BasicSigV3{}
 
 	// Decode the signature in V3
 	err = protobuf.Decode(bufV3, &sigV3dec)
@@ -413,29 +409,18 @@ func TestSignatureEncodingCompatibilityWithProtobuf(t *testing.T) {
 	protobuf.RegisterInterface(func() interface{} { return suiteV4.Scalar() })
 
 	// Decode the signature in V4
-	sigV4 := BasicSigV4{
-		C: suiteV4.Scalar(),
-		R: suiteV4.Scalar(),
-	}
+	sigV4 := BasicSigV4{}
 
 	err = protobuf.Decode(bufV3, &sigV4)
 	if err != nil {
 		t.Fatalf("Failed to decode V3 signature in V4 with protobuf: %v", err)
 	}
 
-	//if err := suiteV4.Read(bufV4, &sigV4); err != nil {
-	//	t.Fatalf("Failed to decode V3 signature in V4: %v", err)
-	//}
-
 	// Re-encode in V4 and compare
 	bufV4, err := protobuf.Encode(&sigV4)
 	if err != nil {
 		t.Fatalf("Failed to re-encode signature in V4 with protobuf: %v", err)
 	}
-
-	//if err := suiteV4.Write(&bufV4Out, &sigV4); err != nil {
-	//	t.Fatalf("Failed to re-encode signature in V4: %v", err)
-	//}
 
 	t.Logf("V4 re-encoded signature: %s", hex.EncodeToString(bufV4))
 
