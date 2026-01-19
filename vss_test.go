@@ -76,7 +76,7 @@ func (v *VerifierV3) processEncryptedDeal(dealBytes []byte) ([]byte, error) {
 
 	respBytes, err := protobuf.Encode(resp)
 	if err != nil {
-		return nil, fmt.Errorf("could not encode response in V3: %v", err)
+		return nil, fmt.Errorf("could not encode response in V3: %w", err)
 	}
 
 	return respBytes, nil
@@ -103,7 +103,7 @@ func (v *VerifierV3) processResponse(responseBytes []byte) error {
 }
 
 func (v *VerifierV3) dealCertified() bool {
-	return v.Verifier.DealCertified()
+	return v.DealCertified()
 }
 
 func (v *VerifierV3) deal() ([]byte, error) {
@@ -165,7 +165,7 @@ func (v *VerifierV4) processResponse(responseBytes []byte) error {
 }
 
 func (v *VerifierV4) dealCertified() bool {
-	return v.Verifier.DealCertified()
+	return v.DealCertified()
 }
 
 func (v *VerifierV4) deal() ([]byte, error) {
@@ -338,13 +338,13 @@ func genPubSecKeys(nbV3, nbV4 int) ([][]byte, [][]byte) {
 
 		pubBytes, err := verifierPub.MarshalBinary()
 		if err != nil {
-			panic(fmt.Errorf("failed to marshal verifier public key V3: %v", err))
+			panic(fmt.Errorf("failed to marshal verifier public key V3: %w", err))
 		}
 		verifiersPublicKeys[i] = pubBytes
 
 		secBytes, err := verifierSec.MarshalBinary()
 		if err != nil {
-			panic(fmt.Errorf("failed to marshal verifier secret key V3: %v", err))
+			panic(fmt.Errorf("failed to marshal verifier secret key V3: %w", err))
 		}
 		verifiersSecretKeys[i] = secBytes
 	}
@@ -354,13 +354,13 @@ func genPubSecKeys(nbV3, nbV4 int) ([][]byte, [][]byte) {
 
 		pubBytes, err := verifierPub.MarshalBinary()
 		if err != nil {
-			panic(fmt.Errorf("failed to marshal verifier public key V4: %v", err))
+			panic(fmt.Errorf("failed to marshal verifier public key V4: %w", err))
 		}
 		verifiersPublicKeys[i] = pubBytes
 
 		secBytes, err := verifierSec.MarshalBinary()
 		if err != nil {
-			panic(fmt.Errorf("failed to marshal verifier secret key V4: %v", err))
+			panic(fmt.Errorf("failed to marshal verifier secret key V4: %w", err))
 		}
 		verifiersSecretKeys[i] = secBytes
 	}
@@ -437,7 +437,7 @@ func byteArrayToDealsV3(arr [][]byte) []*pedersenv3.Deal {
 		dealV3 := &pedersenv3.Deal{}
 		err := protobuf.Decode(deal, dealV3)
 		if err != nil {
-			panic(fmt.Errorf("failed to unmarshal deal to V3: %v", err))
+			panic(fmt.Errorf("failed to unmarshal deal to V3: %w", err))
 		}
 		dealsV3[i] = dealV3
 	}
@@ -450,7 +450,7 @@ func byteArrayToDealsV4(arr [][]byte) []*pedersenv4.Deal {
 		dealV4 := &pedersenv4.Deal{}
 		err := protobuf.Decode(deal, dealV4)
 		if err != nil {
-			panic(fmt.Errorf("failed to unmarshal deal to V4: %v", err))
+			panic(fmt.Errorf("failed to unmarshal deal to V4: %w", err))
 		}
 		dealsV4[i] = dealV4
 	}
@@ -569,14 +569,14 @@ func runTest(t *testing.T, nbVerifiersV3, nbVerifiersV4, dealerVersion int) {
 		secretV3 := bytesToScalarV3(secretBytes)
 		dealerV3, ok := dealer.(*DealerV3)
 		require.True(t, ok)
-		priPoly := dealerV3.Dealer.PrivatePoly()
+		priPoly := dealerV3.PrivatePoly()
 		priCoefficients := priPoly.Coefficients()
 		require.Equal(t, secretV3.String(), priCoefficients[0].String())
 	case 4:
 		secretV4 := bytesToScalarV4(secretBytes)
 		dealerV4, ok := dealer.(*DealerV4)
 		require.True(t, ok)
-		priPoly := dealerV4.Dealer.PrivatePoly()
+		priPoly := dealerV4.PrivatePoly()
 		priCoefficients := priPoly.Coefficients()
 		require.Equal(t, secretV4.String(), priCoefficients[0].String())
 	}
@@ -646,7 +646,10 @@ func TestEncryptedDeal_Serialization(t *testing.T) {
 	require.NoError(t, err)
 
 	// 1. dispatch deal
-	deals, err := dealer.(*DealerV3).EncryptedDeals()
+	dealerV3, ok := dealer.(*DealerV3)
+	require.True(t, ok)
+	deals, err := dealerV3.EncryptedDeals()
+	require.NoError(t, err)
 
 	// Encode the deals to bytes
 	dealsBytes := make([][]byte, len(deals))
