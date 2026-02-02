@@ -3,7 +3,7 @@ module github.com/dedis/kyber-test
 go 1.25.0
 
 //when working locally with a newer version, uncomment the following line
-//replace go.dedis.ch/kyber/v4 => ../kyber
+replace go.dedis.ch/kyber/v4 => ../kyber
 
 require (
 	github.com/stretchr/testify v1.11.1
@@ -22,5 +22,6 @@ require (
 	go.dedis.ch/fixbuf v1.0.3 // indirect
 	golang.org/x/crypto v0.45.0 // indirect
 	golang.org/x/sys v0.38.0 // indirect
+	google.golang.org/protobuf v1.36.11 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
