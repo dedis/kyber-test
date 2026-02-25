@@ -14,7 +14,7 @@ require (
 
 require (
 	github.com/bits-and-blooms/bitset v1.24.4 // indirect
-	github.com/cloudflare/circl v1.6.2 // indirect
+	github.com/cloudflare/circl v1.6.3 // indirect
 	github.com/consensys/gnark-crypto v0.19.2 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/kilic/bls12-381 v0.1.0 // indirect
